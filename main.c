@@ -50,9 +50,9 @@ Si la funcion retorna -1, quiere decir que hubo un error
 alocando la memoria. */
 int insert_entity(Entity **entities, int length, Entity e, int pos);
 
-/* Permite eliminar el ultimo elemento
-de un array de entidades. */
-int remove_entity(Entity **entities, int length);
+/* Permite eliminar el elemento del array
+de entidades `entities` ubicado en `pos`. */
+int remove_entity(Entity **entities, int lengt, int pos);
 
 /* Imprime un array de entidades. */
 void print_entities(Entity *entities, int length);
@@ -84,6 +84,8 @@ int main()
     fprintf(stderr, "cannot insert\n");
     return 1;
   }
+
+  tail_length = remove_entity(&tail, tail_length, 0);
 
   print_entities(tail, tail_length);
 
@@ -265,12 +267,15 @@ int insert_entity(Entity **entities, int length, Entity e, int pos)
   return new_length;
 }
 
-int remove_entity(Entity **entities, int length)
+int remove_entity(Entity **entities, int length, int pos)
 {
   Entity *new_entities;
   int i, new_length;
 
   new_length = length - 1;
+
+  for (i = pos; i < length - 1; ++i)
+    (*entities)[i] = (*entities)[i + 1];
 
   new_entities = (Entity *)realloc(*entities, sizeof(Entity) * new_length);
 
