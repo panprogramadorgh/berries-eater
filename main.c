@@ -38,9 +38,9 @@ Entity *init_tail(Entity player, int initial_tl);
 /* Permite clonar un array de entidades.
 Se debe incluir la longitud maxima para
 el array `from` y `to`. */
-// void clone_entities(Entity from[], int max_from, Entity to[], int max_to);
+void clone_entities(Entity from[], int max_from, Entity to[], int max_to);
 
-/* Permite insertar una entidad al principio
+/* Permite insertar una entidad en la posicion `pos`
 de un array de entidades de longitud dinamica.
 `length` representa la cantidad actual de entidades
 dentro del array. El parametro `e` contiene los datos
@@ -48,7 +48,7 @@ de la nueva entidad a insertar. La funcion retorna
 la nueva longitud para el array de longitud dinamica.
 Si la funcion retorna -1, quiere decir que hubo un error
 alocando la memoria. */
-int insert_entity(Entity **entities, int length, Entity e);
+int insert_entity(Entity **entities, int length, Entity e, int pos);
 
 /* Permite eliminar el ultimo elemento
 de un array de entidades. */
@@ -77,14 +77,13 @@ int main()
 
   Entity e = {'=', {100, 100}};
 
-  // TODO: Arreglar insercion
-  // tail_length = insert_entity(&tail, tail_length, e);
+  tail_length = insert_entity(&tail, tail_length, e, tail_length);
 
-  // ++e.pos.x;
-
-  // tail_length = insert_entity(&tail, tail_length, e);
-
-  tail_length = remove_entity(&tail, tail_length);
+  if (tail_length == -1)
+  {
+    fprintf(stderr, "cannot insert\n");
+    return 1;
+  }
 
   print_entities(tail, tail_length);
 
@@ -235,27 +234,33 @@ void clone_entities(Entity from[], int max_from, Entity to[], int max_to)
     to[i] = from[i];
 }
 
-int insert_entity(Entity **entities, int length, Entity e)
+int insert_entity(Entity **entities, int length, Entity e, int pos)
 {
   Entity *new_entities;
   int i, new_length;
+
+  /*  */
+  if (pos > length || pos < 0)
+    return -1;
 
   /* Incrementar la longitud. */
   new_length = length + 1;
 
   /* Realocar en un bloque de memoria
   con longitud + 1. */
-  new_entities = (Entity *)realloc(*entities, sizeof(Entity) * new_length);
-
+  new_entities = realloc(*entities, sizeof(Entity) * new_length);
   if (new_entities == NULL)
     return -1;
 
-  for (i = 0; i < length; ++i)
-    new_entities[i + 1] = (*entities)[i];
-
-  new_entities[0] = e;
-
   *entities = new_entities;
+
+  if (pos < length)
+  {
+    for (i = length - 1; i >= pos; --i)
+      (*entities)[i + 1] = (*entities)[i];
+  }
+
+  (*entities)[pos] = e;
 
   return new_length;
 }
