@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 #include <ncurses.h>
 
@@ -12,8 +13,8 @@
 /* Define la velocidad de de la serpiente. */
 #define SPEED 10
 
-/* Define la longitud maxima de la serpiente. */
-#define MAX 50
+/* Define la longitud inicial de la serpiente. */
+#define LENGTH 3
 
 typedef struct Vec2
 {
@@ -35,11 +36,6 @@ La funcion retorna un puntero a la primera
 entidad y NULL en caso de fallo alocando la memoria. */
 Entity *init_tail(Entity player, int initial_tl);
 
-/* Permite clonar un array de entidades.
-Se debe incluir la longitud maxima para
-el array `from` y `to`. */
-void clone_entities(Entity from[], int max_from, Entity to[], int max_to);
-
 /* Permite insertar una entidad en la posicion `pos`
 de un array de entidades de longitud dinamica.
 `length` representa la cantidad actual de entidades
@@ -54,20 +50,43 @@ int insert_entity(Entity **entities, int length, Entity e, int pos);
 de entidades `entities` ubicado en `pos`. */
 int remove_entity(Entity **entities, int lengt, int pos);
 
+/* Dibuja los bordes del tablero. */
+void draw_borders(WINDOW *win);
+
 /* Imprime un array de entidades. */
 void print_entities(Entity *entities, int length);
 
-/* FIXME: Convertir array de punteros
-de entidad a array de entidade. */
+/* Variables externas */
+int score = 0;
+
+// FIXME: Arreglar bug con caracter de la berrie.
 
 /* Juego Snake */
 int main()
 {
-  Entity player = {'>', {4, 4}};
+  /* Player (cabeza de la serpiente). */
+  Entity player;
+  Vec2 player_dir;
+
+  /* Cola de la serpiente. */
   int tail_length;
   Entity *tail;
+  Entity tail_chunk;
 
-  tail_length = 3;
+  /* Berries. */
+  Entity berrie;
+
+  int i, c, key, quit;
+
+  /* Inicializar jugador. */
+  player.c = '>';
+  player.pos.x = 5;
+  player.pos.y = 5;
+  player_dir.x = 1;
+  player_dir.y = 0;
+
+  /* Inicializar cola de la serpiente. */
+  tail_length = LENGTH;
   tail = init_tail(player, tail_length);
   if (tail == NULL)
   {
@@ -75,120 +94,164 @@ int main()
     return 1;
   }
 
-  Entity e = {'=', {100, 100}};
+  /* Inicializar semilla de aleatoriedad. */
+  srand(time(NULL));
+  berrie.pos.x = (rand() % WIDTH - 1) + 1;
+  berrie.pos.y = (rand() % HEIGHT - 1) + 1;
 
-  tail_length = insert_entity(&tail, tail_length, e, tail_length);
+  key = ERR;
+  quit = 0;
 
-  if (tail_length == -1)
+  /* Inicializar ventana de ncurses. */
+  WINDOW *win = initscr();
+  keypad(win, true);
+  nodelay(win, true);
+  noecho();
+
+  while (1)
   {
-    fprintf(stderr, "cannot insert\n");
-    return 1;
+    /* Comprobar si el jugador
+    se salio del mapa. */
+    if (player.pos.x <= 0 || player.pos.x >= WIDTH)
+      break;
+    else if (player.pos.y <= 0 || player.pos.y >= HEIGHT)
+      break;
+
+    /* Comprobar si el jugador se
+    choco contra su cola. */
+    for (i = 0; i < tail_length; ++i)
+    {
+      tail_chunk = tail[i];
+      if (tail_chunk.pos.x == player.pos.x &&
+          tail_chunk.pos.y == player.pos.y)
+      {
+        quit = 1;
+        break;
+      }
+    }
+
+    if (quit == 1)
+      break;
+
+    /* Comprobar si el jugador se
+    comio una berrie, en cuyo caso
+    no se debe eliminar la ultima
+    entidad del array `tail`. */
+    if (berrie.pos.x != player.pos.x || berrie.pos.y != player.pos.y)
+    {
+      tail_length = remove_entity(&tail, tail_length, tail_length - 1);
+    }
+    else
+    {
+      ++score;
+      berrie.pos.x = (rand() % WIDTH - 1) + 1;
+      berrie.pos.y = (rand() % HEIGHT - 1) + 1;
+    }
+
+    /* Control de teclas de manera
+    no bloqueante. */
+    key = wgetch(win);
+
+    switch (key)
+    {
+    case ERR:
+      break;
+    case 'q':
+      quit = 1;
+      break;
+
+    case KEY_RIGHT:
+      if (player_dir.x == 0)
+        switch_dir(&player, &player_dir, 1, 0);
+      break;
+
+    case KEY_LEFT:
+      if (player_dir.x == 0)
+      {
+        switch_dir(&player, &player_dir, -1, 0);
+      }
+      break;
+
+    case KEY_UP:
+      if (player_dir.y == 0)
+      {
+        switch_dir(&player, &player_dir, 0, -1);
+      }
+      break;
+
+    case KEY_DOWN:
+      if (player_dir.y == 0)
+      {
+        switch_dir(&player, &player_dir, 0, 1);
+      }
+      break;
+
+    default:
+      break;
+    }
+
+    if (quit == 1)
+      break;
+
+    /* Insercion de nueva primer entidad
+    en el array `tail`. */
+    tail_chunk.pos.x = player.pos.x;
+    tail_chunk.pos.y = player.pos.y;
+
+    if (player_dir.x == 0)
+      tail_chunk.c = 'H';
+    else if (player_dir.y == 0)
+      tail_chunk.c = '=';
+
+    tail_length = insert_entity(&tail, tail_length, tail_chunk, 0);
+
+    /* Movimiento de la cabeza de
+    la serpiente. */
+    player.pos.x += player_dir.x;
+    player.pos.y += player_dir.y;
+
+    /* Eliminar frame anterior */
+    werase(win);
+
+    /* Dibuajr berrie. */
+    wmove(win, berrie.pos.y, berrie.pos.x * 2);
+    waddch(win, berrie.c);
+
+    /* Dibujar cabeza de la serpiente. */
+    wmove(win, player.pos.y, player.pos.x * 2);
+    waddch(win, player.c);
+
+    /* Dibujar cola de la serpiente. */
+    for (i = 0; i < tail_length; ++i)
+    {
+      tail_chunk = tail[i];
+      wmove(win, tail_chunk.pos.y, tail_chunk.pos.x * 2);
+      waddch(win, tail_chunk.c);
+    }
+
+    /* Dibujar bordes. */
+    draw_borders(win);
+
+    /* Refrescar la pantalla y
+    esperar al proximo frame. */
+    wmove(win, 0, 0);
+    wrefresh(win);
+    usleep(1000000 / SPEED);
   }
 
-  tail_length = remove_entity(&tail, tail_length, 0);
+  /* Secuencia de game-over. */
+  werase(win);
+  nodelay(win, false);
+  wprintw(win, "GAME OVER");
+  wgetch(win);
 
-  print_entities(tail, tail_length);
+  endwin();
 
+  /* Liberar la memoria de la
+  cola de la serpiente. */
   free(tail);
   tail = NULL;
 
-  // Vec2 player_dir = {1, 0};
-  // int c, key, game_over;
-  // /* Variable de bucles. */
-  // int x, y;
-
-  // game_over = 0;
-  // key = ERR;
-
-  // WINDOW *win = initscr();
-  // keypad(win, 1);
-  // nodelay(win, 1);
-  // noecho();
-
-  // while (game_over == 0)
-  // {
-  //   key = wgetch(win);
-
-  //   if (key == ERR)
-  //     ;
-
-  //   switch (key)
-  //   {
-  //   case 'q':
-  //     game_over = 1;
-  //     break;
-
-  //   case KEY_RIGHT:
-  //     if (player_dir.x == 0)
-  //       switch_dir(&player, &player_dir, 1, 0);
-  //     break;
-
-  //   case KEY_LEFT:
-  //     if (player_dir.x == 0)
-  //     {
-  //       switch_dir(&player, &player_dir, -1, 0);
-  //     }
-  //     break;
-
-  //   case KEY_UP:
-  //     if (player_dir.y == 0)
-  //     {
-  //       switch_dir(&player, &player_dir, 0, -1);
-  //     }
-  //     break;
-
-  //   case KEY_DOWN:
-  //     if (player_dir.y == 0)
-  //     {
-  //       switch_dir(&player, &player_dir, 0, 1);
-  //     }
-  //     break;
-
-  //   default:
-  //     break;
-  //   }
-
-  //   player.pos.x += player_dir.x;
-  //   player.pos.y += player_dir.y;
-
-  //   werase(win);
-
-  //   /* Dibujar borde */
-  //   for (y = 0; y < HEIGHT; ++y)
-  //   {
-  //     for (x = 0; x < WIDTH; ++x)
-  //     {
-  //       if (
-  //           (x == 0 && y == 0) ||
-  //           (x == 0 && y == HEIGHT - 1) ||
-  //           (x == WIDTH - 1 && y == 0) ||
-  //           (x == WIDTH - 1 && y == HEIGHT - 1))
-  //       {
-  //         wmove(win, y, x * 2);
-  //         waddch(win, '+');
-  //       }
-  //       else if (x == 0 || x == WIDTH - 1)
-  //       {
-  //         wmove(win, y, x * 2);
-  //         waddch(win, '|');
-  //       }
-  //       else if (y == 0 || y == HEIGHT - 1)
-  //       {
-  //         wmove(win, y, x * 2);
-  //         waddch(win, '-');
-  //       }
-  //     }
-  //   }
-
-  //   wmove(win, player.pos.y, player.pos.x * 2);
-  //   waddch(win, player.c);
-
-  //   wrefresh(win);
-
-  //   usleep(1000000 / SPEED);
-  // }
-
-  // endwin();
   return 0;
 }
 
@@ -226,14 +289,6 @@ Entity *init_tail(Entity player, int initial_tl)
   }
 
   return tail;
-}
-
-void clone_entities(Entity from[], int max_from, Entity to[], int max_to)
-{
-  int i;
-
-  for (i = 0; i < max_from && i < max_to; ++i)
-    to[i] = from[i];
 }
 
 int insert_entity(Entity **entities, int length, Entity e, int pos)
@@ -285,6 +340,46 @@ int remove_entity(Entity **entities, int length, int pos)
   *entities = new_entities;
 
   return new_length;
+}
+
+void draw_borders(WINDOW *win)
+{
+  int i, j;
+
+  /* Dibujando bordes. */
+  for (i = 0; i < WIDTH * 2; ++i)
+  {
+    wmove(win, 0, i);
+    waddch(win, '-');
+
+    wmove(win, HEIGHT, i);
+    waddch(win, '-');
+  }
+  for (i = 0; i < HEIGHT; ++i)
+  {
+    wmove(win, i, 0);
+    waddch(win, '|');
+
+    wmove(win, i, WIDTH * 2);
+    waddch(win, '|');
+  }
+
+  /* Dibujando esquinas. */
+  wmove(win, 0, 0);
+  waddch(win, '+');
+
+  wmove(win, HEIGHT, 0);
+  waddch(win, '+');
+
+  wmove(win, 0, WIDTH * 2);
+  waddch(win, '+');
+
+  wmove(win, HEIGHT, WIDTH * 2);
+  waddch(win, '+');
+
+  /* Dibujar puntuacion. */
+  wmove(win, HEIGHT + 1, 0);
+  wprintw(win, "-- SCORE: %d --", score);
 }
 
 void print_entities(Entity entities[], int length)
