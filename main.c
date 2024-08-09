@@ -16,12 +16,19 @@
 /* Define la longitud inicial de la serpiente. */
 #define LENGTH 3
 
+/* Estructura util para
+representar direccciones y
+posiciones en el mapa. */
 typedef struct Vec2
 {
   int x;
   int y;
 } Vec2;
 
+/* Estructura para representar
+cualquier entidad en el mapa.
+(cabeza de jugador, cuerpo de serpiente
+y berries). */
 typedef struct Entity
 {
   char c;
@@ -53,13 +60,18 @@ int remove_entity(Entity **entities, int lengt, int pos);
 /* Dibuja los bordes del tablero. */
 void draw_borders(WINDOW *win);
 
+/* Permite generar numeros
+naturales aleatorios. */
+int randint(int min, int max);
+
 /* Imprime un array de entidades. */
 void print_entities(Entity *entities, int length);
 
 /* Variables externas */
 int score = 0;
-
-// FIXME: Arreglar bug con caracter de la berrie.
+char game_over_text[] = "GAME OVER";
+char snake_tail_init_err[] = "Snake tail inicialization error.\n";
+char snake_tail_resize_err[] = "Snake tail resize error.\n";
 
 /* Juego Snake */
 int main()
@@ -90,14 +102,17 @@ int main()
   tail = init_tail(player, tail_length);
   if (tail == NULL)
   {
-    fprintf(stderr, "snake tail inicialization error\n");
+    fprintf(stderr, "%s", snake_tail_init_err);
+    free(tail);
+    tail = NULL;
     return 1;
   }
 
   /* Inicializar semilla de aleatoriedad. */
   srand(time(NULL));
-  berrie.pos.x = (rand() % WIDTH - 1) + 1;
-  berrie.pos.y = (rand() % HEIGHT - 1) + 1;
+  berrie.c = '@';
+  berrie.pos.x = randint(1, WIDTH);
+  berrie.pos.y = randint(1, HEIGHT);
 
   key = ERR;
   quit = 0;
@@ -132,21 +147,6 @@ int main()
 
     if (quit == 1)
       break;
-
-    /* Comprobar si el jugador se
-    comio una berrie, en cuyo caso
-    no se debe eliminar la ultima
-    entidad del array `tail`. */
-    if (berrie.pos.x != player.pos.x || berrie.pos.y != player.pos.y)
-    {
-      tail_length = remove_entity(&tail, tail_length, tail_length - 1);
-    }
-    else
-    {
-      ++score;
-      berrie.pos.x = (rand() % WIDTH - 1) + 1;
-      berrie.pos.y = (rand() % HEIGHT - 1) + 1;
-    }
 
     /* Control de teclas de manera
     no bloqueante. */
@@ -204,6 +204,37 @@ int main()
       tail_chunk.c = '=';
 
     tail_length = insert_entity(&tail, tail_length, tail_chunk, 0);
+    if (tail_length == -1)
+    {
+      endwin();
+      fprintf(stderr, "%s", snake_tail_resize_err);
+      free(tail);
+      tail = NULL;
+      exit(1);
+    }
+
+    /* Comprobar si el jugador se
+    comio una berrie, en cuyo caso
+    no se debe eliminar la ultima
+    entidad del array `tail`. */
+    if (berrie.pos.x != player.pos.x || berrie.pos.y != player.pos.y)
+    {
+      tail_length = remove_entity(&tail, tail_length, tail_length - 1);
+      if (tail_length == -1)
+      {
+        endwin();
+        fprintf(stderr, "%s", snake_tail_resize_err);
+        free(tail);
+        tail = NULL;
+        exit(1);
+      }
+    }
+    else
+    {
+      ++score;
+      berrie.pos.x = randint(1, WIDTH);
+      berrie.pos.y = randint(1, HEIGHT);
+    }
 
     /* Movimiento de la cabeza de
     la serpiente. */
@@ -240,9 +271,10 @@ int main()
   }
 
   /* Secuencia de game-over. */
-  werase(win);
   nodelay(win, false);
-  wprintw(win, "GAME OVER");
+  wmove(win, HEIGHT / 2, WIDTH - (sizeof(game_over_text) / 2));
+
+  wprintw(win, "%s", game_over_text);
   wgetch(win);
 
   endwin();
@@ -344,7 +376,9 @@ int remove_entity(Entity **entities, int length, int pos)
 
 void draw_borders(WINDOW *win)
 {
+  extern int score;
   int i, j;
+  char score_text[] = " SCORE: XXX ";
 
   /* Dibujando bordes. */
   for (i = 0; i < WIDTH * 2; ++i)
@@ -378,8 +412,15 @@ void draw_borders(WINDOW *win)
   waddch(win, '+');
 
   /* Dibujar puntuacion. */
-  wmove(win, HEIGHT + 1, 0);
-  wprintw(win, "-- SCORE: %d --", score);
+  snprintf(score_text, sizeof(score_text), " SCORE: %3d ", score);
+
+  wmove(win, 0, WIDTH - (sizeof(score_text) / 2));
+  wprintw(win, "%s", score_text);
+}
+
+int randint(int min, int max)
+{
+  return (rand() % (max - min)) + min;
 }
 
 void print_entities(Entity entities[], int length)
